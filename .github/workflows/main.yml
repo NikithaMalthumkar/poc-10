@@ -1,4 +1,4 @@
-name: Deploy HTML to Nginx
+name: Deploy HTML to Nginx (via SSH)
 
 on:
   push:
@@ -8,27 +8,61 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+      SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+name: Deploy HTML to Nginx (via SSH)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install Nginx
+      - name: Prepare SSH key
         run: |
-          sudo apt update
-          sudo apt install -y nginx
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
 
-      - name: Remove default index file
+      - name: Add remote host to known_hosts
         run: |
-          sudo rm -f /var/www/html/index.nginx-debian.html
+          mkdir -p ~/.ssh
+          # default port to 22 if SSH_PORT not set
+          PORT="${SSH_PORT:-22}"
+          ssh-keyscan -p "$PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
-      - name: Copy custom index.html file
+      - name: Copy index.html to remote server
         run: |
-          sudo cp ./index.html /var/www/html/
+          PORT="${SSH_PORT:-22}"
+          scp -o UserKnownHostsFile=~/.ssh/known_hosts -i ~/.ssh/deploy_key -P "$PORT" ./index.html "$SSH_USERNAME@$SSH_HOST:/tmp/index.html"
 
-      - name: Configure Nginx
+      - name: Configure nginx on remote and deploy index
         run: |
-          sudo tee /etc/nginx/sites-available/default > /dev/null <<'EOF'
+          PORT="${SSH_PORT:-22}"
+          ssh -o UserKnownHostsFile=~/.ssh/known_hosts -i ~/.ssh/deploy_key -p "$PORT" "$SSH_USERNAME@$SSH_HOST" bash -s <<'EOF'
+          set -euo pipefail
+
+          # move site file into place (use sudo if necessary)
+          sudo mv /tmp/index.html /var/www/html/index.html
+          sudo chown -R www-data:www-data /var/www/html
+          sudo chmod -R 755 /var/www/html
+
+          # write nginx site config
+          sudo tee /etc/nginx/sites-available/default > /dev/null <<'NGINX_CONF'
           server {
               listen 80 default_server;
               listen [::]:80 default_server;
@@ -42,9 +76,9 @@ jobs:
                   try_files $uri $uri/ =404;
               }
           }
-          EOF
+          NGINX_CONF
 
-      - name: Validate Nginx config and restart
-        run: |
+          # validate and reload nginx
           sudo nginx -t
-          sudo systemctl restart nginx
+          sudo systemctl reload nginx
+          EOF
