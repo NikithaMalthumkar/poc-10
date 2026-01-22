@@ -10,25 +10,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Install Nginx
-      run: |
-        sudo apt update
-        sudo apt install -y nginx
+      - name: Install Nginx
+        run: |
+          sudo apt update
+          sudo apt install -y nginx
 
-    - name: Remove default index file
-      run: |
-        sudo rm -f /var/www/html/index.nginx-debian.html
+      - name: Remove default index file
+        run: |
+          sudo rm -f /var/www/html/index.nginx-debian.html
 
-    - name: Copy custom index.html file
-      run: |
-        sudo cp ./index.html /var/www/html/
+      - name: Copy custom index.html file
+        run: |
+          sudo cp ./index.html /var/www/html/
 
-    - name: Configure Nginx
-      run: |
-        sudo tee /etc/nginx/sites-available/default > /dev/null <<'EOF'
+      - name: Configure Nginx
+        run: |
+          sudo tee /etc/nginx/sites-available/default > /dev/null <<'EOF'
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -44,6 +44,7 @@ server {
 }
 EOF
 
-    - name: Restart Nginx
-      run: |
-        sudo systemctl restart nginx
+      - name: Validate Nginx config and restart
+        run: |
+          sudo nginx -t
+          sudo systemctl restart nginx
