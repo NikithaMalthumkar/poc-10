@@ -1,0 +1,55 @@
+name: Deploy HTML to Nginx
+
+on:
+  push:
+    branches:
+      - main  # Trigger deploy on push to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    
+    - name: Set up SSH key
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}  # Add your private SSH key in GitHub Secrets
+
+    - name: Install Nginx
+      run: |
+        sudo apt update
+        sudo apt install -y nginx
+
+    - name: Remove default index file
+      run: |
+        sudo rm -f /var/www/html/index.nginx-debian.html
+
+    - name: Copy custom index.html file
+      run: |
+        sudo cp ./index.html /var/www/html/
+
+    - name: Configure Nginx
+      run: |
+        sudo tee /etc/nginx/sites-available/default <<EOF
+        server {
+            listen 80 default_server;
+            listen [::]:80 default_server;
+
+            root /var/www/html;
+            index index.html;
+
+            server_name _;
+
+            location / {
+                try_files \$uri \$uri/ =404;
+            }
+        }
+        EOF
+
+    - name: Restart Nginx
+      run: |
+        sudo systemctl restart nginx
+
