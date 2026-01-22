@@ -29,20 +29,20 @@ jobs:
       - name: Configure Nginx
         run: |
           sudo tee /etc/nginx/sites-available/default > /dev/null <<'EOF'
-server {
-    listen 22 default_server;
-    listen [::]:22 default_server;
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
 
-    root /var/www/html;
-    index index.html;
+              root /var/www/html;
+              index index.html;
 
-    server_name _;
+              server_name _;
 
-    location / {
-        try_files $uri $uri/ =404;
-    }
-}
-EOF
+              location / {
+                  try_files $uri $uri/ =404;
+              }
+          }
+          EOF
 
       - name: Validate Nginx config and restart
         run: |
